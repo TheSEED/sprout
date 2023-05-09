@@ -1,0 +1,186 @@
+<Database>
+    <Title>Attributes Database</Title>
+    <Notes>The Attributes Database allows applications to upload and retrieve custom data for NMPDR data objects. It uses the ERDB database system (which is also used by the [[SproutDatabase]] and the [[SaplingDatabase]]) to store the attributes. Attributes differ from conventional data in that they are unstructured: new attributes can be added without modifying the database design. A single attribute database services the entire NMPDR complex. %BR%%BR% Attributes are organized by _attribute key_. Attribute values are assigned to _objects_. In the real world, objects have types and IDs; however, to the attribute database only the ID matters. In general, it is possible to determine the object type from the format of the ID, but it doesn't matter to the database. %BR%%BR% The actual attribute values are stored as a relationship between the attribute keys and the objects. There can be multiple values for a single key/object pair.</Notes>
+    <Entities>
+        <Entity name="AttributeGroup" keyType="string">
+            <DisplayInfo theme="seed" col="3" row="1" caption="Attribute Group" />
+            <Notes>A group is a named set of attribute keys. An attribute key
+            can belong to many groups or none at all.</Notes>
+            <Asides>Groups provide a useful mechanism for classifying certain
+            types of attribute keys. An attribute key's group membership is
+            updated using a table of checkboxes in the attribute web interface.
+            The interface also allows new groups to be created. There is a group
+            for attributes that are only used for %FIG{ProteinEncodingGroups}%
+            and another for attributes that require NMPDR support. Groups can
+            also be used to specify attribute key white lists for individual
+            applications.</Asides>
+        </Entity>
+        <Entity name="AttributeKey" keyType="string">
+            <DisplayInfo theme="seed" col="3" row="3" caption="Attribute Key" />
+            <Notes>An attribute key describes named values attached to a
+            particular type of object. Each instance of this entity contains the
+            attribute's description and its name. An attribute key name must
+            consist of letters, numbers, periods, underscores, and/or
+            hyphens.</Notes>
+            <Fields>
+                <Field name="description" type="text">
+                    <Notes>Text describing the attribute. This should explain
+                    what the attribute means and what kinds of values are
+                    appropriate.</Notes>
+                </Field>
+                <Field name="relationship-name" type="string">
+                    <Notes>Name of the relationship containing the attribute
+                    data. This relationship must look exactly like HasValueFor.
+                    The only difference is the table name.</Notes>
+                    <Asides>In order to improve performance of batch updates,
+                    some attributes are stored in private relationship tables.
+                    When retrieving attributes, we need to check each attribute
+                    key's private table for the data. The tables have the same
+                    structure as HasValueFor. They are separated solely for
+                    performance reasons.</Asides>
+                </Field>
+            </Fields>
+        </Entity>
+        <Entity name="TargetObject" keyType="string">
+            <DisplayInfo theme="neutral" col="3" row="5" caption="Target Object" />
+            <Notes>An object represents a keyed thing to which an attribute can
+            be assigned. In order to improve performance, this table has no data
+            in it. It is simply required by the semantics of the
+            database.</Notes>
+        </Entity>
+    </Entities>
+    <Relationships>
+        <Relationship name="IsEvidencedBy" to="TargetObject" from="AttributeKey" arity="MM" converse="HasEvidence">
+            <DisplayInfo theme="seed" col="3.5" row="4" fixed="1" caption="Is\nEvidenced\nBy" />
+            <Notes>This relationship connects a feature (target object) to its
+            evidence attributes.</Notes>
+            <Asides>This table exists to separate evidence codes from other
+            attributes for performance reasons. Evidence codes are built from
+            scratch several times a week. Erasing an entire table is faster than
+            erasing individual rows, so putting the evidence codes in their own
+            private table provides significant benefits.</Asides>
+            <Fields>
+                <Field name="subkey" type="string">
+                    <Notes>Some attribute keys are split into two parts. The
+                    real key is controlled and must correspond to a key in the
+                    AttributeKey table. The second part of the key resides in
+                    this field. When the attribute value is presented to the
+                    user, the two parts of the key are joined together around
+                    the splitter value.</Notes>
+                </Field>
+                <Field name="value" type="text">
+                    <Notes>This is the actual attribute value. Note that a
+                    single key/object pair may in fact have many values, and
+                    therefore many entries in this table.</Notes>
+                </Field>
+            </Fields>
+            <FromIndex>
+                <Notes>This index sorts all the values for a single attribute
+                key by the subkey value.</Notes>
+                <IndexFields>
+                    <IndexField name="subkey" order="ascending" />
+                </IndexFields>
+            </FromIndex>
+            <ToIndex>
+                <Notes>This index sorts all the values for an object by
+                attribute key and the subkey.</Notes>
+                <IndexFields>
+                    <IndexField name="from-link" order="ascending" />
+                    <IndexField name="subkey" order="ascending" />
+                </IndexFields>
+            </ToIndex>
+            <Indexes>
+                <Index>
+                    <Notes>This index allows searching for an attribute value by
+                    its prefix.</Notes>
+                    <IndexFields>
+                        <IndexField name="value" order="ascending" />
+                    </IndexFields>
+                </Index>
+                <Index>
+                    <Notes>This index allows searching for values within
+                    keys.</Notes>
+                    <IndexFields>
+                        <IndexField name="from-link" order="ascending" />
+                        <IndexField name="value" order="ascending" />
+                    </IndexFields>
+                </Index>
+                <Index>
+                    <Notes>This index sorts all the values for a single
+                    attribute key by the target object ID.</Notes>
+                    <IndexFields>
+                        <IndexField name="from-link" order="ascending" />
+                        <IndexField name="to-link" order="ascending" />
+                    </IndexFields>
+                </Index>
+            </Indexes>
+        </Relationship>
+        <Relationship name="IsInGroup" from="AttributeKey" to="AttributeGroup" arity="MM">
+            <DisplayInfo theme="seed" caption="Is\nGroup\nOf" />
+            <Notes>This relationship connects an attribute key to the groups of
+            which it is a member.</Notes>
+        </Relationship>
+        <Relationship name="HasValueFor" from="AttributeKey" to="TargetObject" arity="MM" converse="HasValueOf">
+            <DisplayInfo theme="seed" col="2.5" row="4" fixed="1" caption="Has\nValue\nFor" />
+            <Notes>This relationship connects an attribute key to its objects.
+            It contains the attribute values, and is therefore the primary data
+            repository for the database.</Notes>
+            <Fields>
+                <Field name="subkey" type="string">
+                    <Notes>Some attribute keys are split into two parts. The
+                    real key is controlled and must correspond to a key in the
+                    AttributeKey table. The second part of the key resides in
+                    this field. When the attribute value is presented to the
+                    user, the two parts of the key are joined together around
+                    the splitter value.</Notes>
+                </Field>
+                <Field name="value" type="text">
+                    <Notes>This is the actual attribute value. Note that a
+                    single key/object pair may in fact have many values, and
+                    therefore many entries in this table.</Notes>
+                </Field>
+            </Fields>
+            <FromIndex>
+                <Notes>This index sorts all the values for a single attribute
+                key by the subkey value.</Notes>
+                <IndexFields>
+                    <IndexField name="subkey" order="ascending" />
+                </IndexFields>
+            </FromIndex>
+            <ToIndex>
+                <Notes>This index sorts all the values for an object by
+                attribute key and the subkey.</Notes>
+                <IndexFields>
+                    <IndexField name="from-link" order="ascending" />
+                    <IndexField name="subkey" order="ascending" />
+                </IndexFields>
+            </ToIndex>
+            <Indexes>
+                <Index>
+                    <Notes>This index allows searching for an attribute value by
+                    its prefix.</Notes>
+                    <IndexFields>
+                        <IndexField name="value" order="ascending" />
+                    </IndexFields>
+                </Index>
+                <Index>
+                    <Notes>This index allows searching for values within
+                    keys.</Notes>
+                    <IndexFields>
+                        <IndexField name="from-link" order="ascending" />
+                        <IndexField name="value" order="ascending" />
+                    </IndexFields>
+                </Index>
+                <Index>
+                    <Notes>This index sorts all the values for a single
+                    attribute key by the target object ID.</Notes>
+                    <IndexFields>
+                        <IndexField name="from-link" order="ascending" />
+                        <IndexField name="to-link" order="ascending" />
+                    </IndexFields>
+                </Index>
+            </Indexes>
+        </Relationship>
+    </Relationships>
+    <Shapes></Shapes>
+</Database>
